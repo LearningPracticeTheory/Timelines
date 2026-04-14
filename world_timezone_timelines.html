@@ -1,0 +1,752 @@
+<!-- World Timezone Timeline v5.9.3 | IndexedDB cache -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Timezone Timeline v5.9.3</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.2/styles/vis-timeline-graph2d.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment-timezone@0.5.43/builds/moment-timezone-with-data.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.2/standalone/umd/vis-timeline-graph2d.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:Microsoft YaHei,sans-serif; }
+    body { padding:25px; background:#f5f7fa; }
+    .control { 
+      display:flex; gap:12px; margin-bottom:20px; padding:14px 18px; 
+      background:#fff; border-radius:8px; box-shadow:0 1px 5px rgba(0,0,0,0.08); 
+      align-items:center; flex-wrap:wrap;
+    }
+    .search-box{ position:relative; min-width:380px; flex:1; }
+    #searchInput{
+      width:100%; padding:10px 14px; font-size:14px;
+      border-radius:6px; border:1px solid #ddd;
+    }
+    #cityDropdown{
+      position:absolute; top:100%; left:0; right:0;
+      background:white; border:1px solid #ddd;
+      border-radius:6px; max-height:320px; overflow-y:auto;
+      display:none; z-index:9999;
+    }
+    .city-item{
+      padding:10px 15px; cursor:pointer; font-size:14px;
+    }
+    .city-item:hover{ background:#f5f5f5; }
+    button { padding:10px 16px; background:#409eff; color:white; border:none; border-radius:6px; cursor:pointer; }
+    button:hover { background:#337ecc; }
+    .btn-save { background:#28a745; }
+    .btn-load { background:#17a2b8; }
+    .btn-clear { background:#dc3545; }
+    
+    #timelineContainer { position:relative; }
+    #globalYAxis { position:absolute; top:0; left:200px; width:2px; height:100%; background:#f56c6c; z-index:9999; cursor:col-resize; box-shadow:0 0 5px rgba(245,108,108,0.5); }
+    .time-tooltip { position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:#f56c6c; color:#fff; padding:2px 6px; border-radius:4px; font-size:12px; white-space:nowrap; z-index:9999; }
+    
+    .city-timeline {
+      position:relative; margin-bottom:16px; background:#fff; border-radius:8px; padding:12px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.05); cursor:default; user-select:none;
+    }
+    .timeline-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .del-btn { background:#ff4444; color:#fff; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; }
+    .timeline { height:100px; border:1px solid #e4e7ed; border-radius:6px; position:relative; z-index:1; }
+    .city-y-tooltip { position:absolute; top:38px; transform:translateX(10px); padding:3px 8px; border-radius:4px; font-size:12px; white-space:nowrap; z-index:9999!important; pointer-events:none; font-weight:bold; }
+
+    .event-modal {
+      position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5);
+      display:flex; align-items:center; justify-content:center; z-index:99999; display:none;
+    }
+    .modal-box{ background:#fff;padding:24px;border-radius:10px;width:560px; position:relative; z-index:100000; }
+    .modal-box h3{margin-bottom:18px;font-size:16px;}
+    .form-row{ margin-bottom:14px;display:flex;align-items:center;gap:8px; width:100%; flex-wrap:nowrap; }
+    .form-row label{display:block;margin-bottom:6px;font-size:14px;color:#666;min-width:70px;}
+    .form-row input{ flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:4px; min-width:180px; max-width:220px; }
+    .modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+    .btn-cancel{background:#909399;}
+    .select2-container--open .select2-dropdown { z-index:999999 !important; }
+    .select2-container { min-width:160px; flex:1; max-width:220px; }
+
+    .tooltip-icon {
+      width:18px; height:18px; border-radius:50%; background:#409eff; color:#fff;
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; cursor:help; margin-left:4px;
+      position: relative;
+    }
+    .tooltip-box {
+      position:absolute; 
+      left: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      margin-left: 6px;
+      background:#333; color:#fff; padding:4px 8px;
+      border-radius:4px; font-size:12px; white-space:nowrap;
+      z-index:999999; display:none;
+    }
+
+    .load-modal, .save-name-modal {
+      position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5);
+      display:flex; align-items:center; justify-content:center; z-index:999999; display:none;
+    }
+    .load-box, .save-name-box {
+      background:#fff; padding:24px; border-radius:10px; width:460px;
+    }
+    .load-box h3, .save-name-box h3 { margin-bottom:16px; font-size:16px; }
+    #saveList {
+      max-height: 50vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .save-item {
+      padding:10px 12px; border:1px solid #ddd; border-radius:6px; margin-bottom:8px;
+      cursor:pointer; display:flex; justify-content:space-between; align-items:center;
+    }
+    .save-item:hover { background:#f8f9fa; border-color:#409eff; }
+    .save-item.selected {
+      background:#e8f4ff;
+      border-color:#409eff;
+    }
+    .save-name { font-size:14px; color:#333; }
+    .no-saves { text-align:center; padding:20px; color:#999; }
+
+    .sortable-ghost { opacity: 0.4; background: #e0e0e0; }
+    .sortable-chosen { cursor: move; }
+  </style>
+</head>
+
+<body>
+<div id="saveNameModal" class="save-name-modal">
+  <div class="save-name-box">
+    <h3>Save Event Record</h3>
+    <div class="form-row">
+      <label>Save Name</label>
+      <input type="text" id="saveNameInput" placeholder="Input save name">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeSaveNameModal()">Cancel</button>
+      <button onclick="confirmSave()">Confirm Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="loadModal" class="load-modal">
+  <div class="load-box">
+    <h3>Select Saved Record</h3>
+    <div id="saveList"></div>
+    <div class="modal-btns" style="margin-top:20px;">
+      <button id="btnConfirmLoad" onclick="finalLoadRecord()" style="background:#28a745;">Confirm</button>
+      <button class="btn-cancel" onclick="closeLoadModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="eventModal" class="event-modal">
+  <div class="modal-box">
+    <h3 id="modalTitle">Add Event</h3>
+    <div class="form-row">
+      <label>Event Name</label>
+      <input type="text" id="eventName" placeholder="Input event name" style="max-width:none;">
+    </div>
+    <div class="form-row" style="position:relative;">
+      <label>Start Time</label>
+      <select id="startCitySelect"></select>
+      <input type="datetime-local" id="eventStart">
+      <div class="tooltip-icon" id="tipStart">?</div>
+      <div class="tooltip-box" id="boxStart">local time</div>
+    </div>
+    <div class="form-row" style="position:relative;">
+      <label>End Time</label>
+      <select id="endCitySelect"></select>
+      <input type="datetime-local" id="eventEnd">
+      <div class="tooltip-icon" id="tipEnd">?</div>
+      <div class="tooltip-box" id="boxEnd">local time</div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button onclick="submitEvent()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="control">
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search city/state worldwide">
+    <div id="cityDropdown"></div>
+  </div>
+  <button id="addBtn">Add City Timeline</button>
+  <button class="btn-save" onclick="openSaveModal()">Save Events</button>
+  <button class="btn-load" onclick="openLoadModal()">Load Events</button>
+</div>
+
+<div id="timelineContainer">
+  <div id="globalYAxis"><div class="time-tooltip" id="yAxisTime">drag</div></div>
+  <div id="timelineList"></div>
+</div>
+
+<script>
+const timelines = [];
+const addedCities = new Set();
+const yAxis = document.getElementById("globalYAxis");
+const tooltip = document.getElementById("yAxisTime");
+
+let userFixedTime = new Date().getTime();
+let currentItems = null;
+let editItemId = null;
+let isSyncing = false;
+let currentTz = "Asia/Shanghai";
+let currentCityName = "";
+
+let cityData = null;
+let allCityKeys = [];
+let selectedCityKey = "";
+let selectedTz = "";
+
+let currentLoadedRecordName = "";
+let currentLoadedRecordIndex = -1;
+
+const DB_NAME = "CityTimezoneDB";
+const DB_VERSION = 1;
+const STORE_NAME = "cacheStore";
+const CACHE_KEY = "city_timezone_db_v2";
+const CACHE_EXPIRE = 7 * 24 * 60 * 60 * 1000;
+const SAVE_STORAGE_KEY = "timeline_saved_records";
+
+// DEFAULT EMBEDDED TEMP RECORD v5.9.2
+const DEFAULT_TEMP_RECORD = {"name":"temp","cities":[{"cityName":"Chicago/Illinois/United States","tz":"America/Chicago"},{"cityName":"Taoyuan/Taiwan/China","tz":"Asia/Shanghai"},{"cityName":"Okinawa/Japan","tz":"Asia/Tokyo"},{"cityName":"Shenzhen/Guangdong/China","tz":"Asia/Shanghai"}],"data":[{"cityName":"Okinawa/Japan","id":1776177266915,"content":"OKA -> HKG","start":"2026-04-25T07:10:00.000Z","end":"2026-04-25T10:00:00.000Z","startCityName":"Okinawa/Japan","endCityName":"Shenzhen/Guangdong/China","startTz":"Asia/Tokyo","endTz":"Asia/Shanghai","startStr":"2026-04-25T16:10","endStr":"2026-04-25T18:00"},{"cityName":"Okinawa/Japan","id":1776179347139,"content":"OKA -> TPE","start":"2026-04-25T01:15:00.000Z","end":"2026-04-25T02:55:00.000Z","startCityName":"Okinawa/Japan","endCityName":"Taoyuan/Taiwan/China","startTz":"Asia/Tokyo","endTz":"Asia/Shanghai","startStr":"2026-04-25T10:15","endStr":"2026-04-25T10:55"},{"cityName":"Chicago/Illinois/United States","id":1776177527803,"content":"ORD -> TPE","start":"2026-04-18T05:30:00.000Z","end":"2026-04-18T21:20:00.000Z","startCityName":"Chicago/Illinois/United States","endCityName":"Taoyuan/Taiwan/China","startTz":"America/Chicago","endTz":"Asia/Shanghai","startStr":"2026-04-18T00:30","endStr":"2026-04-19T05:20"},{"cityName":"Shenzhen/Guangdong/China","id":1776177034947,"content":"SZ -> HK","start":"2026-04-18T00:45:00.000Z","end":"2026-04-18T01:25:00.000Z","startCityName":"Shenzhen/Guangdong/China","endCityName":"Shenzhen/Guangdong/China","startTz":"Asia/Shanghai","endTz":"Asia/Shanghai","startStr":"2026-04-18T08:45","endStr":"2026-04-18T09:25"},{"cityName":"Shenzhen/Guangdong/China","id":1776177105355,"content":"HKG -> OKA","start":"2026-04-18T03:11:00.000Z","end":"2026-04-18T06:10:00.000Z","startCityName":"Shenzhen/Guangdong/China","endCityName":"Okinawa/Japan","startTz":"Asia/Shanghai","endTz":"Asia/Tokyo","startStr":"2026-04-18T11:11","endStr":"2026-04-18T15:10"},{"cityName":"Shenzhen/Guangdong/China","id":1776177323011,"content":"HKG -> SZ","start":"2026-04-25T12:00:00.000Z","end":"2026-04-25T12:40:00.000Z","startCityName":"Shenzhen/Guangdong/China","endCityName":"Shenzhen/Guangdong/China","startTz":"Asia/Shanghai","endTz":"Asia/Shanghai","startStr":"2026-04-25T20:00","endStr":"2026-04-25T20:40"},{"cityName":"Taoyuan/Taiwan/China","id":1776177581611,"content":"TPE -> OKA","start":"2026-04-18T22:45:00.000Z","end":"2026-04-19T00:16:00.000Z","startCityName":"Taoyuan/Taiwan/China","endCityName":"Okinawa/Japan","startTz":"Asia/Shanghai","endTz":"Asia/Tokyo","startStr":"2026-04-19T06:45","endStr":"2026-04-19T09:16"},{"cityName":"Taoyuan/Taiwan/China","id":1776179423475,"content":"TPE -> ORD","start":"2026-04-25T12:00:00.000Z","end":"2026-04-26T02:00:00.000Z","startCityName":"Taoyuan/Taiwan/China","endCityName":"Chicago/Illinois/United States","startTz":"Asia/Shanghai","endTz":"America/Chicago","startStr":"2026-04-25T20:00","endStr":"2026-04-25T21:00"}],"viewport":{"start":"2026-04-16T22:26:08.502Z","end":"2026-04-20T04:32:59.227Z","userFixedTime":"2026-04-18T05:30:00.000Z","yAxisLeft":"588.441px"}};
+
+let tempSelectedIndex = -1;
+let db;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "key" });
+      }
+    };
+    req.onsuccess = e => {
+      db = e.target.result;
+      resolve(db);
+    };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function setCache(key, data) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put({ key, data, time: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e.target.error);
+  });
+}
+
+function getCache(key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function loadCityJsonData() {
+  await openDB();
+  const cached = await getCache(CACHE_KEY);
+  if (cached && Date.now() - cached.time < CACHE_EXPIRE) {
+    try {
+      cityData = cached.data;
+      allCityKeys = Object.keys(cityData);
+      return;
+    } catch(e){}
+  }
+  try {
+    const resp = await fetch("https://raw.githubusercontent.com/LearningPracticeTheory/Timelines/refs/heads/main/city_state_timezones.json");
+    cityData = await resp.json();
+    allCityKeys = Object.keys(cityData);
+    await setCache(CACHE_KEY, cityData);
+  } catch (e) {
+    console.error("City data load failed");
+  }
+}
+
+$(document).on('mouseenter', '#tipStart', () => $('#boxStart').show());
+$(document).on('mouseleave', '#tipStart', () => $('#boxStart').hide());
+$(document).on('mouseenter', '#tipEnd', () => $('#boxEnd').show());
+$(document).on('mouseleave', '#tipEnd', () => $('#boxEnd').hide());
+
+let sortableInstance = null;
+function initSortable() {
+  if (sortableInstance) return;
+  sortableInstance = new Sortable(document.getElementById('timelineList'), {
+    animation: 150,
+    handle: '.timeline-header',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    onEnd: () => { syncYAxis(); }
+  });
+}
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+function getTzByName(cityName) {
+  const target = timelines.find(t => t.name === cityName);
+  return target ? target.rawTz : "Asia/Shanghai";
+}
+
+function getValidTz(cityTz) {
+  if (!cityTz) return "Asia/Shanghai";
+  const tz = cityTz.trim().toUpperCase();
+  const map = {
+    "UTC":"UTC","UTC+8":"Asia/Shanghai","CST":"Asia/Shanghai","CHINA":"Asia/Shanghai",
+    "JST":"Asia/Tokyo","UTC+9":"Asia/Tokyo","OKINAWA":"Asia/Tokyo",
+    "PST":"America/Los_Angeles","UTC-8":"America/Los_Angeles",
+    "EST":"America/New_York","UTC-5":"America/New_York",
+    "CET":"Europe/Paris","UTC+1":"Europe/Paris",
+    "GMT":"Europe/London","BST":"Europe/London"
+  };
+  for (const k in map) if (tz.includes(k)) return map[k];
+  if (moment.tz.zone(cityTz)) return cityTz;
+  return "Asia/Shanghai";
+}
+
+document.getElementById('searchInput').addEventListener('input', function () {
+  const keyword = this.value.trim().toLowerCase();
+  const dropdown = document.getElementById('cityDropdown');
+  if (!keyword || !cityData) { dropdown.style.display = 'none'; return; }
+  let matches = allCityKeys.filter(key => key.toLowerCase().includes(keyword));
+  matches.sort((a, b) => {
+    const aFirst = a.split('/')[0].toLowerCase();
+    const bFirst = b.split('/')[0].toLowerCase();
+    const aIsState = a.split('/').length === 2;
+    const bIsState = b.split('/').length === 2;
+    const aFull = aFirst === keyword; const bFull = bFirst === keyword;
+    if (aFull && !bFull) return -1; if (!aFull && bFull) return 1;
+    if (aFull && bFull) { if (aIsState && !bIsState) return -1; if (!aIsState && bIsState) return 1; }
+    const aStart = aFirst.startsWith(keyword); const bStart = bFirst.startsWith(keyword);
+    if (aStart && !bStart) return -1; if (!aStart && bStart) return 1;
+    return a.localeCompare(b);
+  });
+  if (matches.length === 0) {
+    dropdown.innerHTML = '<div class="city-item">No city found</div>';
+    dropdown.style.display = 'block'; selectedCityKey = ""; selectedTz = ""; return;
+  }
+  let html = '';
+  matches.slice(0,100).forEach(key => { html += `<div class="city-item" data-key="${key}">${key}</div>`; });
+  dropdown.innerHTML = html; dropdown.style.display = 'block';
+});
+
+document.getElementById('cityDropdown').addEventListener('click', function (e) {
+  const item = e.target.closest('.city-item');
+  if (!item) return;
+  const key = item.dataset.key;
+  document.getElementById('searchInput').value = key;
+  this.style.display = 'none';
+  selectedCityKey = key; selectedTz = cityData[key].tz;
+});
+
+function refreshEventCitySelects() {
+  const $start = $("#startCitySelect"); const $end = $("#endCitySelect");
+  $start.empty(); $end.empty();
+  timelines.forEach(t => {
+    const opt = `<option value="${t.name}">${t.name}</option>`;
+    $start.append(opt); $end.append(opt);
+  });
+}
+
+function openModal(items, ptime, tz, cityName) {
+  editItemId = null; currentItems = items; currentTz = tz; currentCityName = cityName;
+  document.getElementById("modalTitle").innerText = "Add Event";
+  document.getElementById("eventName").value = "event";
+  refreshEventCitySelects();
+  $("#startCitySelect").val(currentCityName).trigger("change");
+  $("#endCitySelect").val(currentCityName).trigger("change");
+  const t = moment.tz(ptime, getValidTz(tz));
+  document.getElementById("eventStart").value = t.format("YYYY-MM-DDTHH:mm");
+  document.getElementById("eventEnd").value = t.clone().add(1,'h').format("YYYY-MM-DDTHH:mm");
+  document.getElementById("eventModal").style.display = "flex";
+}
+
+function openEditModal(item, items, tz, cityName) {
+  editItemId = item.id; currentItems = items; currentTz = tz; currentCityName = cityName;
+  document.getElementById("modalTitle").innerText = "Edit Event";
+  document.getElementById("eventName").value = item.content;
+  refreshEventCitySelects();
+  $("#startCitySelect").val(item.startCityName || currentCityName).trigger("change");
+  $("#endCitySelect").val(item.endCityName || currentCityName).trigger("change");
+  document.getElementById("eventStart").value = item.startStr;
+  document.getElementById("eventEnd").value = item.endStr;
+  document.getElementById("eventModal").style.display = "flex";
+}
+
+function closeModal() { document.getElementById("eventModal").style.display = "none"; }
+
+function submitEvent() {
+  const name = document.getElementById("eventName").value.trim();
+  const startCityName = $("#startCitySelect").val();
+  const endCityName = $("#endCitySelect").val();
+  const sStr = document.getElementById("eventStart").value;
+  const eStr = document.getElementById("eventEnd").value;
+  const realStartTz = getValidTz(getTzByName(startCityName));
+  const realEndTz = getValidTz(getTzByName(endCityName));
+  const realStart = moment.tz(sStr, realStartTz).toDate();
+  const realEnd = moment.tz(eStr, realEndTz).toDate();
+  if (!name || isNaN(realStart) || isNaN(realEnd) || realStart >= realEnd) {
+    alert("Invalid input"); return;
+  }
+  const eventData = {
+    id: editItemId || Date.now(), content: name, start: realStart, end: realEnd,
+    startCityName: startCityName, endCityName: endCityName,
+    startTz: realStartTz, endTz: realEndTz, startStr:sStr, endStr:eStr
+  };
+  editItemId ? currentItems.update(eventData) : currentItems.add(eventData);
+  closeModal();
+}
+
+let isDragging=false;
+yAxis.addEventListener("mousedown",()=>{isDragging=true});
+document.addEventListener("mousemove",e=>{
+  if(!isDragging||!timelines.length)return;
+  const t=timelines[0].tl.getEventProperties(e).time;
+  if(t)userFixedTime=t.getTime(); syncYAxis();
+});
+document.addEventListener("mouseup",()=>{isDragging=false});
+
+function moveYAxisToTime(time, sourceTl) {
+  if (!timelines.length) return;
+  const source = timelines.find(i => i.tl === sourceTl);
+  const range = source.tl.getWindow();
+  const rect = source.tl.dom.centerContainer.getBoundingClientRect();
+  let x = (time - range.start) / (range.end - range.start) * rect.width;
+  x = Math.max(0, Math.min(rect.width, x));
+  yAxis.style.left = x + 13 + "px";
+  userFixedTime = time; updateAll();
+}
+
+function syncYAxis() {
+  if (!timelines.length) return;
+  const main = timelines[0].tl;
+  const range = main.getWindow();
+  const rect = main.dom.centerContainer.getBoundingClientRect();
+  let x = (userFixedTime - range.start) / (range.end - range.start) * rect.width;
+  x = Math.max(0, Math.min(rect.width, x));
+  yAxis.style.left = x + 13 + "px";
+  updateAll();
+}
+
+function syncAllTimezones(sourceTl) {
+  if (isSyncing) return;
+  isSyncing = true;
+  const r = sourceTl.getWindow();
+  timelines.forEach(t => {
+    if (t.tl !== sourceTl) {
+      t.tl.setWindow(new Date(r.start), new Date(r.end), { animation: false });
+    }
+  });
+  syncYAxis();
+  setTimeout(() => { isSyncing = false; }, 50);
+}
+
+function add(rawTz, displayName) {
+  try {
+    const isExist = timelines.some(t => t.name === displayName);
+    if (isExist) { alert("This city timeline already exists!"); return; }
+
+    const safeId = rawTz.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).substr(2,5);
+    if (addedCities.has(safeId)) return; addedCities.add(safeId);
+    const realTz = getValidTz(rawTz);
+    const wrap = document.createElement("div");
+    wrap.className = "city-timeline"; wrap.dataset.tz = safeId;
+    const tlId = "tl_" + safeId; const tipId = "tip_" + safeId;
+    wrap.innerHTML = `
+      <div class="timeline-header">
+        <div>${displayName}</div>
+        <button class="del-btn" onclick="remove('${safeId}')">Delete</button>
+      </div>
+      <div id="${tlId}" class="timeline"></div>
+      <div class="city-y-tooltip" id="${tipId}"></div>
+    `;
+    document.getElementById("timelineList").appendChild(wrap);
+    const tl = new vis.Timeline(document.getElementById(tlId));
+    tl.setOptions({
+      showCurrentTime: false, zoomable: true, moveable: true, orientation: 'top', locale: 'en',
+      moment: date => moment.tz(date, realTz)
+    });
+    const items = new vis.DataSet([]);
+    const now = moment.tz(realTz).toDate();
+    items.add({ id: 'now-'+safeId, content: '', start: now, type: 'point' });
+    tl.setItems(items);
+    if (timelines.length > 0) {
+      const mainRange = timelines[0].tl.getWindow();
+      tl.setWindow(mainRange.start, mainRange.end, {animation:false});
+    }
+    tl.on('click', p => {
+      if (p.what === 'item') moveYAxisToTime(items.get(p.item).start, tl);
+      if (p.what === 'background') openModal(items, p.time, rawTz, displayName);
+    });
+    tl.on('contextmenu', p => p.what==='item' && moveYAxisToTime(items.get(p.item).end, tl));
+    tl.on('doubleClick', p => p.what==='item' && openEditModal(items.get(p.item), items, rawTz, displayName));
+    timelines.push({ tl, tz: safeId, rawTz: rawTz, tipId, name: displayName });
+    tl.on("rangechanged", () => { syncAllTimezones(tl); syncYAxis(); });
+    updateAll();
+  } catch (err) {
+    console.error("Add failed:", err);
+    alert("Add city failed: " + err.message);
+  }
+}
+
+const tzColorMap=new Map();
+const colorList=["#409eff","#67c23a","#e6a23c","#f56c6c","#8e44ad","#1abc9c","#34495e","#d35400"];
+function getColor(tz){
+  const o=moment.tz(getValidTz(tz)).utcOffset();
+  if(!tzColorMap.has(o))tzColorMap.set(o,colorList[tzColorMap.size%colorList.length]);
+  return tzColorMap.get(o);
+}
+
+function remove(safeId){
+  const i=timelines.findIndex(t=>t.tz===safeId);
+  if(i===-1)return;
+  timelines.splice(i,1); addedCities.delete(safeId);
+  document.querySelector(`.city-timeline[data-tz="${safeId}"]`).remove();
+  syncYAxis();
+}
+
+function updateAll(){
+  if(!timelines.length){tooltip.innerText="drag";return}
+  const x=parseFloat(yAxis.style.left); const t=userFixedTime;
+  tooltip.innerText = "drag";
+  timelines.forEach(i=>{
+    const tip=document.getElementById(i.tipId);
+    if(tip){
+      tip.style.left=(x+12)+"px";
+      tip.style.background=getColor(i.rawTz);
+      const cityFirst = i.name.split('/')[0];
+      tip.innerText=moment.tz(t, getValidTz(i.rawTz)).format("MM-DD HH:mm")+` [${cityFirst}]`;
+    }
+  });
+}
+
+function getAllCurrentEvents() {
+  const events = [];
+  timelines.forEach(city => {
+    const items = city.tl.itemsData.get();
+    items.forEach(item => {
+      if (!item.id.toString().startsWith('now-')) {
+        events.push({ cityName: city.name, ...item });
+      }
+    });
+  });
+  return events;
+}
+
+function getAllTimelineCitiesInDisplayOrder() {
+  const ordered = [];
+  document.querySelectorAll(".city-timeline").forEach(el => {
+    const tz = el.dataset.tz;
+    const item = timelines.find(t => t.tz === tz);
+    if (item) {
+      ordered.push({ cityName: item.name, tz: item.rawTz });
+    }
+  });
+  return ordered;
+}
+
+function getViewportState() {
+  if (!timelines.length) return null;
+  const w = timelines[0].tl.getWindow();
+  return {
+    start: w.start,
+    end: w.end,
+    userFixedTime: userFixedTime,
+    yAxisLeft: yAxis.style.left
+  };
+}
+
+function ensureDefaultTempRecord() {
+  let records = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "[]");
+  const hasTemp = records.some(r => r.name === "temp");
+  if (!hasTemp) {
+    records.unshift(DEFAULT_TEMP_RECORD);
+    localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(records));
+  }
+}
+
+function openSaveModal() {
+  const input = document.getElementById("saveNameInput");
+  if (currentLoadedRecordName) {
+    input.value = currentLoadedRecordName;
+  } else {
+    input.value = moment().format("YYYY-MM-DD HH:mm:ss");
+  }
+  document.getElementById("saveNameModal").style.display = "flex";
+}
+
+function closeSaveNameModal() {
+  document.getElementById("saveNameModal").style.display = "none";
+}
+
+function confirmSave() {
+  const inputName = document.getElementById("saveNameInput").value.trim();
+  if (!inputName) {
+    alert("Please input save name!");
+    return;
+  }
+
+  const cities = getAllTimelineCitiesInDisplayOrder();
+  const events = getAllCurrentEvents();
+  const viewport = getViewportState();
+  let records = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "[]");
+  
+  const newRecord = {
+    name: inputName,
+    cities: cities,
+    data: events,
+    viewport: viewport
+  };
+
+  if (currentLoadedRecordIndex >= 0 && inputName === currentLoadedRecordName) {
+    records[currentLoadedRecordIndex] = newRecord;
+    alert(`Overwrite saved: ${inputName}`);
+  } else {
+    records.unshift(newRecord);
+    currentLoadedRecordName = inputName;
+    currentLoadedRecordIndex = 0;
+    alert(`Saved as new record: ${inputName}`);
+  }
+
+  localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(records));
+  closeSaveNameModal();
+}
+
+function openLoadModal() {
+  ensureDefaultTempRecord();
+  const records = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "[]");
+  const list = document.getElementById("saveList");
+  
+  tempSelectedIndex = -1;
+  document.getElementById("btnConfirmLoad").disabled = true;
+
+  if (records.length === 0) {
+    list.innerHTML = '<div class="no-saves">No saved records</div>';
+  } else {
+    let html = "";
+    records.forEach((rec, idx) => {
+      html += `<div class="save-item" onclick="selectRecord(${idx})">
+                 <span class="save-name">${rec.name}</span>
+               </div>`;
+    });
+    list.innerHTML = html;
+  }
+
+  document.getElementById("loadModal").style.display = "flex";
+}
+
+function closeLoadModal() {
+  document.getElementById("loadModal").style.display = "none";
+}
+
+function selectRecord(index) {
+  tempSelectedIndex = index;
+  document.getElementById("btnConfirmLoad").disabled = false;
+  document.querySelectorAll(".save-item").forEach((el, i) => {
+    el.classList.toggle("selected", i === index);
+  });
+}
+
+function clearAllCities() {
+  timelines.length = 0;
+  addedCities.clear();
+  document.getElementById("timelineList").innerHTML = "";
+  syncYAxis();
+}
+
+async function finalLoadRecord() {
+  const records = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "[]");
+  const index = tempSelectedIndex;
+  if (!records[index] || index < 0) return;
+
+  const record = records[index];
+  currentLoadedRecordName = record.name;
+  currentLoadedRecordIndex = index;
+
+  clearAllCities();
+  if (!cityData) await loadCityJsonData();
+
+  if (record.cities && record.cities.length > 0) {
+    for (const c of record.cities) {
+      add(c.tz, c.cityName);
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  await new Promise(r => setTimeout(r, 200));
+
+  if (record.data) {
+    record.data.forEach(event => {
+      const city = timelines.find(c => c.name === event.cityName);
+      if (city) {
+        const fixEvent = { 
+          ...event, 
+          start: new Date(event.start), 
+          end: new Date(event.end) 
+        };
+        city.tl.itemsData.add(fixEvent);
+      }
+    });
+  }
+
+  if (record.viewport && timelines.length) {
+    const vp = record.viewport;
+    const mainTl = timelines[0].tl;
+    mainTl.setWindow(new Date(vp.start), new Date(vp.end), { animation: false });
+    userFixedTime = new Date(vp.userFixedTime).getTime();
+    yAxis.style.left = vp.yAxisLeft;
+    
+    setTimeout(() => {
+      syncAllTimezones(mainTl);
+      syncYAxis();
+      updateAll();
+    }, 50);
+  }
+
+  refreshEventCitySelects();
+  closeLoadModal();
+}
+
+async function addDefaultCities() {
+  await loadCityJsonData();
+  add("Asia/Shanghai", "Shanghai/China");
+  await new Promise(r => setTimeout(r, 100));
+  add("Asia/Tokyo", "Tokyo/Japan");
+  await new Promise(r => setTimeout(r, 100));
+  add("America/Los_Angeles", "Los Angeles/United States");
+  await new Promise(r => setTimeout(r, 100));
+}
+
+$("#addBtn").click(async ()=>{
+  if(!selectedTz || !selectedCityKey){
+    alert("Please select a city first"); return;
+  }
+  add(selectedTz, selectedCityKey);
+});
+
+(async ()=>{
+  await loadCityJsonData();
+  initSortable();
+  ensureDefaultTempRecord();
+  await addDefaultCities(); 
+  $("#startCitySelect, #endCitySelect").select2({ placeholder: "Select city" });
+})();
+</script>
+</body>
+</html>
